@@ -85,6 +85,8 @@ static Key keys[] = {
   { MODKEY,                             XK_l,      focusmon,       {.i = +1 } },
   { MODKEY|ShiftMask,                   XK_h,      tagmon,         {.i = -1 } },
   { MODKEY|ShiftMask,                   XK_l,      tagmon,         {.i = +1 } },
+  { MODKEY|ShiftMask,             XK_j,      rotatestack,    {.i = +1 } },
+  { MODKEY|ShiftMask,             XK_k,      rotatestack,    {.i = -1 } },
   { MODKEY,                             XK_section,  togglescratch,  {.v = scratchpadcmd } },
   TAGKEYS(                        XK_1, 0)
   TAGKEYS(                        XK_2, 1)
