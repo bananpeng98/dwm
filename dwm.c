@@ -184,12 +184,12 @@ static int getrootptr(int *x, int *y);
 static long getstate(Window w);
 static int gettextprop(Window w, Atom atom, char *text, unsigned int size);
 static void grabbuttons(Client *c, int focused);
-static void grabkeys(void);
+/* static void grabkeys(void); */
 static void incnmaster(const Arg *arg);
-static void keypress(XEvent *e);
+/* static void keypress(XEvent *e); */
 static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
-static void mappingnotify(XEvent *e);
+/* static void mappingnotify(XEvent *e); */
 static void maprequest(XEvent *e);
 static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
@@ -267,8 +267,8 @@ static void (*handler[LASTEvent]) (XEvent *) = {
 	[EnterNotify] = enternotify,
 	[Expose] = expose,
 	[FocusIn] = focusin,
-	[KeyPress] = keypress,
-	[MappingNotify] = mappingnotify,
+	/* [KeyPress] = keypress, */
+	/* [MappingNotify] = mappingnotify, */
 	[MapRequest] = maprequest,
 	[MotionNotify] = motionnotify,
 	[PropertyNotify] = propertynotify,
@@ -313,15 +313,15 @@ static Cmd cmds[] = {
 	{ "rotatestack_down",   rotatestack,    {.i = +1 } },
 	{ "rotatestack_up",     rotatestack,    {.i = -1 } },
 	{ "togglescratch",      togglescratch,  {.v = scratchpadcmd } },
-	TAGCMDS(0)
-	TAGCMDS(1)
-	TAGCMDS(2)
-	TAGCMDS(3)
-	TAGCMDS(4)
-	TAGCMDS(5)
-	TAGCMDS(6)
-	TAGCMDS(7)
-	TAGCMDS(8)
+	TAGCMDS(0, "1")
+	TAGCMDS(1, "2")
+	TAGCMDS(2, "3")
+	TAGCMDS(3, "4")
+	TAGCMDS(4, "5")
+	TAGCMDS(5, "6")
+	TAGCMDS(6, "7")
+	TAGCMDS(7, "8")
+	TAGCMDS(8, "9")
 	{ "quit",               quit,           {0} },
 };
 
@@ -1023,23 +1023,23 @@ grabbuttons(Client *c, int focused)
 	}
 }
 
-void
-grabkeys(void)
-{
-	updatenumlockmask();
-	{
-		unsigned int i, j;
-		unsigned int modifiers[] = { 0, LockMask, numlockmask, numlockmask|LockMask };
-		KeyCode code;
+/* void */
+/* grabkeys(void) */
+/* { */
+/* 	updatenumlockmask(); */
+/* 	{ */
+/* 		unsigned int i, j; */
+/* 		unsigned int modifiers[] = { 0, LockMask, numlockmask, numlockmask|LockMask }; */
+/* 		KeyCode code; */
 
-		XUngrabKey(dpy, AnyKey, AnyModifier, root);
-		for (i = 0; i < LENGTH(keys); i++)
-			if ((code = XKeysymToKeycode(dpy, keys[i].keysym)))
-				for (j = 0; j < LENGTH(modifiers); j++)
-					XGrabKey(dpy, code, keys[i].mod | modifiers[j], root,
-						True, GrabModeAsync, GrabModeAsync);
-	}
-}
+/* 		XUngrabKey(dpy, AnyKey, AnyModifier, root); */
+/* 		for (i = 0; i < LENGTH(keys); i++) */
+/* 			if ((code = XKeysymToKeycode(dpy, keys[i].keysym))) */
+/* 				for (j = 0; j < LENGTH(modifiers); j++) */
+/* 					XGrabKey(dpy, code, keys[i].mod | modifiers[j], root, */
+/* 						True, GrabModeAsync, GrabModeAsync); */
+/* 	} */
+/* } */
 
 void
 incnmaster(const Arg *arg)
@@ -1060,21 +1060,21 @@ isuniquegeom(XineramaScreenInfo *unique, size_t n, XineramaScreenInfo *info)
 }
 #endif /* XINERAMA */
 
-void
-keypress(XEvent *e)
-{
-	unsigned int i;
-	KeySym keysym;
-	XKeyEvent *ev;
+/* void */
+/* keypress(XEvent *e) */
+/* { */
+/* 	unsigned int i; */
+/* 	KeySym keysym; */
+/* 	XKeyEvent *ev; */
 
-	ev = &e->xkey;
-	keysym = XKeycodeToKeysym(dpy, (KeyCode)ev->keycode, 0);
-	for (i = 0; i < LENGTH(keys); i++)
-		if (keysym == keys[i].keysym
-		&& CLEANMASK(keys[i].mod) == CLEANMASK(ev->state)
-		&& keys[i].func)
-			keys[i].func(&(keys[i].arg));
-}
+/* 	ev = &e->xkey; */
+/* 	keysym = XKeycodeToKeysym(dpy, (KeyCode)ev->keycode, 0); */
+/* 	for (i = 0; i < LENGTH(keys); i++) */
+/* 		if (keysym == keys[i].keysym */
+/* 		&& CLEANMASK(keys[i].mod) == CLEANMASK(ev->state) */
+/* 		&& keys[i].func) */
+/* 			keys[i].func(&(keys[i].arg)); */
+/* } */
 
 void
 killclient(const Arg *arg)
@@ -1161,15 +1161,15 @@ manage(Window w, XWindowAttributes *wa)
 	focus(NULL);
 }
 
-void
-mappingnotify(XEvent *e)
-{
-	XMappingEvent *ev = &e->xmapping;
+/* void */
+/* mappingnotify(XEvent *e) */
+/* { */
+/* 	XMappingEvent *ev = &e->xmapping; */
 
-	XRefreshKeyboardMapping(ev);
-	if (ev->request == MappingKeyboard)
-		grabkeys();
-}
+/* 	XRefreshKeyboardMapping(ev); */
+/* 	if (ev->request == MappingKeyboard) */
+/* 		grabkeys(); */
+/* } */
 
 void
 maprequest(XEvent *e)
@@ -1711,7 +1711,7 @@ setup(void)
 		|LeaveWindowMask|StructureNotifyMask|PropertyChangeMask;
 	XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
 	XSelectInput(dpy, root, wa.event_mask);
-	grabkeys();
+	/* grabkeys(); */
 	focus(NULL);
 	socketinit();
 }
@@ -1763,6 +1763,9 @@ socketinit(void)
 		perror("socket error");
 		exit(-1);
 	}
+
+	int prio = 7;
+	setsockopt(socketfd, SOL_SOCKET, SO_PRIORITY, &prio, 1);
 
 	memset(&socketaddr, 0, sizeof(socketaddr));
 	socketaddr.sun_family = AF_UNIX;
