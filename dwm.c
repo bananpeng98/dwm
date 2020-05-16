@@ -21,6 +21,7 @@
  * To understand everything else, start reading main().
  */
 #include <errno.h>
+#include <fcntl.h>
 #include <locale.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -28,7 +29,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <X11/cursorfont.h>
 #include <X11/keysym.h>
@@ -105,6 +108,12 @@ typedef struct {
 	void (*func)(const Arg *);
 	const Arg arg;
 } Key;
+
+typedef struct {
+	const char* name;
+	void (*func)(const Arg *);
+	const Arg arg;
+} Cmd;
 
 typedef struct {
 	const char *symbol;
@@ -208,6 +217,8 @@ static void setup(void);
 static void seturgent(Client *c, int urg);
 static void showhide(Client *c);
 static void sigchld(int unused);
+static void socketinit(void);
+static void socketread(void);
 static void spawn(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
@@ -271,9 +282,48 @@ static Display *dpy;
 static Drw *drw;
 static Monitor *mons, *selmon;
 static Window root, wmcheckwin;
+static struct sockaddr_un socketaddr;
+static char socketbuf[100];
+static int socketfd, socketcl, socketrc;
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
+
+static Cmd cmds[] = {
+	{ "togglebar",          togglebar,      {0} },
+	{ "focusstack_up",      focusstack,     {.i = -1 } },
+	{ "focusstack_down",    focusstack,     {.i = +1 } },
+	{ "incnmaster_up",      incnmaster,     {.i = +1 } },
+	{ "incnmaster_down",    incnmaster,     {.i = -1 } },
+	{ "setmfact_up",        setmfact,       {.i = +0.05 } },
+	{ "setmfact_down",      setmfact,       {.i = -0.05 } },
+	{ "view_toggle",        view,           {0} },
+	{ "killclient",         killclient,     {0} },
+	{ "setlayout_tiling",   setlayout,      {.v = &layouts[0]} },
+	{ "setlayout_floating", setlayout,      {.v = &layouts[1]} },
+	{ "setlayout_monocle",  setlayout,      {.v = &layouts[2]} },
+	{ "setlayout_toggle",   setlayout,      {0} },
+	{ "togglefloating",     togglefloating, {0} },
+	{ "view_all",           view,           {.ui = ~0 } },
+	{ "tag_all",            tag,            {.ui = ~0 } },
+	{ "focusmon_left",      focusmon,       {.i = -1 } },
+	{ "focusmon_right",     focusmon,       {.i = +1 } },
+	{ "tagmon_left",        tagmon,         {.i = -1 } },
+	{ "tagmon_right",       tagmon,         {.i = +1 } },
+	{ "rotatestack_down",   rotatestack,    {.i = +1 } },
+	{ "rotatestack_up",     rotatestack,    {.i = -1 } },
+	{ "togglescratch",      togglescratch,  {.v = scratchpadcmd } },
+	TAGCMDS(0)
+	TAGCMDS(1)
+	TAGCMDS(2)
+	TAGCMDS(3)
+	TAGCMDS(4)
+	TAGCMDS(5)
+	TAGCMDS(6)
+	TAGCMDS(7)
+	TAGCMDS(8)
+	{ "quit",               quit,           {0} },
+};
 
 static unsigned int scratchtag = 1 << LENGTH(tags);
 
@@ -1442,9 +1492,11 @@ run(void)
 	XEvent ev;
 	/* main event loop */
 	XSync(dpy, False);
-	while (running && !XNextEvent(dpy, &ev))
-		if (handler[ev.type])
+	while (running) {
+		socketread();
+		if (!XNextEvent(dpy, &ev) && handler[ev.type])
 			handler[ev.type](&ev); /* call handler */
+	}
 }
 
 void
@@ -1661,6 +1713,7 @@ setup(void)
 	XSelectInput(dpy, root, wa.event_mask);
 	grabkeys();
 	focus(NULL);
+	socketinit();
 }
 
 
@@ -1701,6 +1754,62 @@ sigchld(int unused)
 	if (signal(SIGCHLD, sigchld) == SIG_ERR)
 		die("can't install SIGCHLD handler:");
 	while (0 < waitpid(-1, NULL, WNOHANG));
+}
+
+void
+socketinit(void)
+{
+	if ((socketfd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+		perror("socket error");
+		exit(-1);
+	}
+
+	memset(&socketaddr, 0, sizeof(socketaddr));
+	socketaddr.sun_family = AF_UNIX;
+	if (*socket_path == '\0') {
+		*socketaddr.sun_path = '\0';
+		strncpy(socketaddr.sun_path+1, socket_path+1, sizeof(socketaddr.sun_path)-2);
+	} else {
+		strncpy(socketaddr.sun_path, socket_path, sizeof(socketaddr.sun_path)-1);
+		unlink(socket_path);
+	}
+
+	if (bind(socketfd, (struct sockaddr*)&socketaddr, sizeof(socketaddr)) == -1) {
+		perror("bind error");
+		exit(-1);
+	}
+
+	if (listen(socketfd, 5) == -1) {
+		perror("listen error");
+		exit(-1);
+	}
+
+	fcntl(socketfd, F_SETFL, O_NONBLOCK);
+}
+
+void
+socketread(void)
+{
+	unsigned int i;
+
+	if ((socketcl = accept(socketfd, NULL, NULL)) != -1) {
+		if ((socketrc = read(socketcl, socketbuf, sizeof(socketbuf))) > 0) {
+			printf("read %u bytes: %.*s\n", socketrc, socketrc, socketbuf);
+			for (i = 0; i < LENGTH(cmds); i++) {
+				if (strncmp(cmds[i].name, socketbuf, socketrc-1) == 0 && cmds[i].func) {
+					cmds[i].func(&(cmds[i].arg));
+				}
+			}
+		}
+		if (socketrc == -1) {
+			perror("read");
+			exit(-1);
+		}
+		else if (socketrc == 0) {
+			printf("EOF\n");
+			close(socketcl);
+		}
+	}
 }
 
 void

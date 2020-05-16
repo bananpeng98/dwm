@@ -30,7 +30,7 @@ static const Rule rules[] = {
   { "Firefox",  NULL,       NULL,       0,            0,           0 },
   { "Gimp",     NULL,       NULL,       1 << 4,       1,           -1 },
   { "Spotify",  "spotify", "Spotify",   1 << 8,       0,           -1 },
-  { "mpv",      NULL,      NULL,        0,            1,           -1 },
+  { "mpv",      NULL,      NULL,        0xff,            1,           -1 },
 };
 
 /* layout(s) */
@@ -52,6 +52,14 @@ static const Layout layouts[] = {
   { MODKEY|ControlMask,           KEY,      toggleview,     {.ui = 1 << TAG} }, \
   { MODKEY|ShiftMask,             KEY,      tag,            {.ui = 1 << TAG} }, \
   { MODKEY|ControlMask|ShiftMask, KEY,      toggletag,      {.ui = 1 << TAG} },
+
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+#define TAGCMDS(TAG) \
+  { "view_" STR(TAG),       view,           {.ui = 1 << TAG} }, \
+  { "toggleview_" STR(TAG), toggleview,     {.ui = 1 << TAG} }, \
+  { "tag_" STR(TAG),        tag,            {.ui = 1 << TAG} }, \
+  { "toggletag_" STR(TAG),  toggletag,      {.ui = 1 << TAG} },
 
 /* helper for spawning shell commands in the pre dwm-5.0 fashion */
 #define SHCMD(cmd) { .v = (const char*[]){ "/bin/sh", "-c", cmd, NULL } }
@@ -117,3 +125,7 @@ static Button buttons[] = {
   { ClkTagBar,            MODKEY,         Button1,        tag,            {0} },
   { ClkTagBar,            MODKEY,         Button3,        toggletag,      {0} },
 };
+
+char *socket_path = "/tmp/dwm.socket";
+
+
