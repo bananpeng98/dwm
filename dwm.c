@@ -289,6 +289,8 @@ static int socketfd, socketcl, socketrc;
 /* configuration, allows nested code to access above variables */
 #include "config.h"
 
+static const unsigned int scratchtag = 1 << LENGTH(tags);
+
 static Cmd cmds[] = {
 	{ "togglebar",          togglebar,      {0} },
 	{ "focusstack_up",      focusstack,     {.i = -1 } },
@@ -324,8 +326,6 @@ static Cmd cmds[] = {
 	TAGCMDS(8, "9")
 	{ "quit",               quit,           {0} },
 };
-
-static unsigned int scratchtag = 1 << LENGTH(tags);
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
 struct NumTags { char limitexceeded[LENGTH(tags) > 31 ? -1 : 1]; };
@@ -1494,8 +1494,10 @@ run(void)
 	XSync(dpy, False);
 	while (running) {
 		socketread();
-		if (!XNextEvent(dpy, &ev) && handler[ev.type])
+		if (XCheckWindowEvent(dpy, root, ~NoEventMask, &ev) && handler[ev.type]){
 			handler[ev.type](&ev); /* call handler */
+		}
+		usleep(10000);
 	}
 }
 
@@ -1771,9 +1773,9 @@ socketinit(void)
 	socketaddr.sun_family = AF_UNIX;
 	if (*socket_path == '\0') {
 		*socketaddr.sun_path = '\0';
-		strncpy(socketaddr.sun_path+1, socket_path+1, sizeof(socketaddr.sun_path)-2);
+		exit(-1);
 	} else {
-		strncpy(socketaddr.sun_path, socket_path, sizeof(socketaddr.sun_path)-1);
+		snprintf(socketaddr.sun_path, sizeof(socketaddr.sun_path), "%s", socket_path);
 		unlink(socket_path);
 	}
 
@@ -1796,11 +1798,22 @@ socketread(void)
 	unsigned int i;
 
 	if ((socketcl = accept(socketfd, NULL, NULL)) != -1) {
-		if ((socketrc = read(socketcl, socketbuf, sizeof(socketbuf))) > 0) {
+		if ((socketrc = read(socketcl, socketbuf, sizeof(socketbuf)-1)) > 0) {
+			socketbuf[socketrc] = '\0';
 			printf("read %u bytes: %.*s\n", socketrc, socketrc, socketbuf);
 			for (i = 0; i < LENGTH(cmds); i++) {
-				if (strncmp(cmds[i].name, socketbuf, socketrc-1) == 0 && cmds[i].func) {
+				if (strncmp(cmds[i].name, socketbuf, socketrc) == 0 && cmds[i].func) {
 					cmds[i].func(&(cmds[i].arg));
+					socketrc = snprintf(socketbuf, sizeof(socketbuf), "%s", "SUCCESS");
+					fcntl(socketcl, F_SETFL, O_NONBLOCK);
+					if (write(socketcl, socketbuf, socketrc) != socketrc) {
+						if (socketrc > 0) fprintf(stderr, "partial write");
+						else {
+							perror("write error");
+							exit(-1);
+						}
+					}
+					break;
 				}
 			}
 		}

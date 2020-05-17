@@ -86,6 +86,4 @@ static Button buttons[] = {
   { ClkTagBar,            MODKEY,         Button3,        toggletag,      {0} },
 };
 
-char *socket_path = "/tmp/dwm.socket";
-
-
+#include "dwmc.h"
