@@ -13,7 +13,8 @@ int main(int argc, char *argv[]) {
   char buf[100];
   int fd,rc;
 
-  if (argc > 1) snprintf(buf, sizeof(buf), "%s", argv[1]);
+  if (argc == 2) snprintf(buf, sizeof(buf), "%s\n", argv[1]);
+  else if (argc == 4) snprintf(buf, sizeof(buf), "%s %s %s\n", argv[1], argv[2], argv[3]);
   else exit(-1);
 
   rc = strlen(buf);
@@ -39,7 +40,7 @@ int main(int argc, char *argv[]) {
 
   printf("%s", buf);
   if (send(fd, buf, rc, 0) != rc) {
-    if (rc > 0) fprintf(stderr,"partial write");
+    if (rc > 0) fprintf(stderr, "partial write");
     else {
       perror("write error");
       exit(-1);
@@ -55,7 +56,6 @@ int main(int argc, char *argv[]) {
       if ((rc = recv(fd, buf, sizeof(buf)-1, 0)) > 0) {
         buf[rc] = '\0';
         printf("%s\n", buf);
-        break;
       } else {
         break;
       }

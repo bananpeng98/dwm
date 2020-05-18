@@ -112,7 +112,7 @@ typedef struct {
 typedef struct {
 	const char* name;
 	void (*func)(const Arg *);
-	const Arg arg;
+	const Arg darg;
 } Cmd;
 
 typedef struct {
@@ -293,37 +293,23 @@ static const unsigned int scratchtag = 1 << LENGTH(tags);
 
 static Cmd cmds[] = {
 	{ "togglebar",          togglebar,      {0} },
-	{ "focusstack_up",      focusstack,     {.i = -1 } },
-	{ "focusstack_down",    focusstack,     {.i = +1 } },
-	{ "incnmaster_up",      incnmaster,     {.i = +1 } },
-	{ "incnmaster_down",    incnmaster,     {.i = -1 } },
-	{ "setmfact_up",        setmfact,       {.i = +0.05 } },
-	{ "setmfact_down",      setmfact,       {.i = -0.05 } },
-	{ "view_toggle",        view,           {0} },
+	{ "focusstack",         focusstack,     {.i = -1 } },
+	{ "incnmaster",         incnmaster,     {.i = +1 } },
+	{ "setmfact",           setmfact,       {.i = +0.05 } },
+	{ "view",               view,           {.ui = 0} },
+	{ "toggleview",         toggleview,     {0} },
+	{ "tag",                tag,            {0} },
+	{ "toggletag",          toggletag,      {0} },
 	{ "killclient",         killclient,     {0} },
 	{ "setlayout_tiling",   setlayout,      {.v = &layouts[0]} },
 	{ "setlayout_floating", setlayout,      {.v = &layouts[1]} },
 	{ "setlayout_monocle",  setlayout,      {.v = &layouts[2]} },
-	{ "setlayout_toggle",   setlayout,      {0} },
+	{ "setlayout",          setlayout,      {0} },
 	{ "togglefloating",     togglefloating, {0} },
-	{ "view_all",           view,           {.ui = ~0 } },
-	{ "tag_all",            tag,            {.ui = ~0 } },
-	{ "focusmon_left",      focusmon,       {.i = -1 } },
-	{ "focusmon_right",     focusmon,       {.i = +1 } },
-	{ "tagmon_left",        tagmon,         {.i = -1 } },
-	{ "tagmon_right",       tagmon,         {.i = +1 } },
-	{ "rotatestack_down",   rotatestack,    {.i = +1 } },
-	{ "rotatestack_up",     rotatestack,    {.i = -1 } },
+	{ "focusmon",           focusmon,       {.i = -1 } },
+	{ "tagmon",             tagmon,         {.i = -1 } },
+	{ "rotatestack",        rotatestack,    {.i = +1 } },
 	{ "togglescratch",      togglescratch,  {.v = scratchpadcmd } },
-	TAGCMDS(0, "1")
-	TAGCMDS(1, "2")
-	TAGCMDS(2, "3")
-	TAGCMDS(3, "4")
-	TAGCMDS(4, "5")
-	TAGCMDS(5, "6")
-	TAGCMDS(6, "7")
-	TAGCMDS(7, "8")
-	TAGCMDS(8, "9")
 	{ "quit",               quit,           {0} },
 };
 
@@ -1494,7 +1480,7 @@ run(void)
 	XSync(dpy, False);
 	while (running) {
 		socketread();
-		if (XCheckWindowEvent(dpy, root, ~NoEventMask, &ev) && handler[ev.type]){
+		if (XCheckMaskEvent(dpy, ~NoEventMask, &ev) && handler[ev.type]){
 			handler[ev.type](&ev); /* call handler */
 		}
 		usleep(10000);
@@ -1796,34 +1782,56 @@ void
 socketread(void)
 {
 	unsigned int i;
+	char cmd[64];
+	char type[4];
+	char param[16];
+	int cmd_len = 0, param_len = 0, type_len = 0;
+	Arg arg;
+	char noarg = 0;
+	char fail = 1;
 
 	if ((socketcl = accept(socketfd, NULL, NULL)) != -1) {
+	    fcntl(socketcl, F_SETFL, O_NONBLOCK);
+		socketrc = snprintf(socketbuf, sizeof(socketbuf), "%s\n", "Connect");
+		write(socketcl, socketbuf, socketrc);
 		if ((socketrc = read(socketcl, socketbuf, sizeof(socketbuf)-1)) > 0) {
 			socketbuf[socketrc] = '\0';
-			printf("read %u bytes: %.*s\n", socketrc, socketrc, socketbuf);
+			sscanf(socketbuf, "%s%n%s%n%s%n", cmd, &cmd_len, type, &type_len, param, &param_len);
+
+			socketrc = snprintf(socketbuf, sizeof(socketbuf), "Received: %s %i %s %i %s %i\n", cmd, cmd_len, type, type_len, param, param_len);
+			write(socketcl, socketbuf, socketrc);
+
+			if (param_len == 0) noarg = 1;
+			else if (strncmp(type, "i", 1) == 0)
+				sscanf(param, "%i", &(arg.i));
+			else if (strncmp(type, "ui", 2) == 0) {
+				sscanf(param, "%u", &(arg.ui));
+				arg.ui = 1 << (arg.ui-1);
+			}
+			else if (strncmp(type, "f", 1) == 0)
+				sscanf(param, "%f", &(arg.f));
+
+			socketrc = snprintf(socketbuf, sizeof(socketbuf), "Parsed: %i %u %f\n", arg.i, arg.ui, arg.f);
+			write(socketcl, socketbuf, socketrc);
+
+
 			for (i = 0; i < LENGTH(cmds); i++) {
-				if (strncmp(cmds[i].name, socketbuf, socketrc) == 0 && cmds[i].func) {
-					cmds[i].func(&(cmds[i].arg));
-					socketrc = snprintf(socketbuf, sizeof(socketbuf), "%s", "SUCCESS");
-					fcntl(socketcl, F_SETFL, O_NONBLOCK);
-					if (write(socketcl, socketbuf, socketrc) != socketrc) {
-						if (socketrc > 0) fprintf(stderr, "partial write");
-						else {
-							perror("write error");
-							exit(-1);
-						}
-					}
+				if (strncmp(cmds[i].name, cmd, cmd_len-1) == 0 && cmds[i].func) {
+					if (noarg) arg = cmds[i].darg;
+					cmds[i].func(&arg);
+					fail = 0;
 					break;
 				}
 			}
 		}
+
+		socketrc = snprintf(socketbuf, sizeof(socketbuf), "Status: %s\n", fail ? "FAIL" : "SUCCESS");
+		write(socketcl, socketbuf, socketrc);
+
 		if (socketrc == -1) {
 			perror("read");
-			exit(-1);
-		}
-		else if (socketrc == 0) {
-			printf("EOF\n");
-			close(socketcl);
+		} else if (socketrc == 0) {
+		    close(socketcl);
 		}
 	}
 }
