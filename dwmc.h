@@ -1,2 +1,2 @@
 
-char *socket_path = "/tmp/dwm.socket";
+char *socketpath = "/tmp/dwm.socket";

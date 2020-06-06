@@ -6,63 +6,42 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <poll.h>
+#include "socket.h"
 
+int running = 1;
+
+void
+status(const Arg *arg)
+{
+    running = 0;
+}
+
+void
+echo(const Arg *arg)
+{
+    if (arg && *(arg->s))
+        printf("%s\n", arg->s);
+}
+
+Cmd cmds[] = {
+    { "status", status, {0} },
+    { "echo",   echo, {0} },
+};
 
 int main(int argc, char *argv[]) {
-  struct sockaddr_un addr;
-  char buf[100];
-  int fd,rc;
+    socketinit(socketpath, cmds, 1);
+    socketconnect();
 
-  if (argc == 2) snprintf(buf, sizeof(buf), "%s\n", argv[1]);
-  else if (argc == 4) snprintf(buf, sizeof(buf), "%s %s %s\n", argv[1], argv[2], argv[3]);
-  else exit(-1);
+    if (argc == 2) socketwrite("%s\n", argv[1]);
+    else if (argc == 4) socketwrite("%s %s %s\n", argv[1], argv[2], argv[3]);
 
-  rc = strlen(buf);
-
-  if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-    perror("socket error");
-    exit(-1);
-  }
-
-  memset(&addr, 0, sizeof(addr));
-  addr.sun_family = AF_UNIX;
-  if (*socket_path == '\0') {
-    *addr.sun_path = '\0';
-    exit(-1);
-  } else {
-    snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", socket_path);
-  }
-
-  if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
-    perror("connect error");
-    exit(-1);
-  }
-
-  printf("%s", buf);
-  if (send(fd, buf, rc, 0) != rc) {
-    if (rc > 0) fprintf(stderr, "partial write");
-    else {
-      perror("write error");
-      exit(-1);
+    while (running) {
+        socketread();
     }
-  }
 
-  struct pollfd pfd[] = {
-    { fd, POLLIN, 0 }
-  };
+    printf("end\n");
 
-  while (poll(pfd, 1, -1) > 0) {
-    if (pfd[0].revents & POLLIN) {
-      if ((rc = recv(fd, buf, sizeof(buf)-1, 0)) > 0) {
-        buf[rc] = '\0';
-        printf("%s\n", buf);
-      } else {
-        break;
-      }
-    }
-  }
+    socketclose();
 
-  close(fd);
-
-  return 0;
+    return 0;
 }

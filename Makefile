@@ -3,10 +3,10 @@
 
 include config.mk
 
-SRC = drw.c dwm.c util.c
+SRC = drw.c dwm.c util.c socket.c
 OBJ = ${SRC:.c=.o}
 
-SRC_C = dwmc.c
+SRC_C = dwmc.c socket.c
 OBJ_C = ${SRC_C:.c=.o}
 
 all: options dwm dwmc

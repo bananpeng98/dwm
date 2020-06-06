@@ -46,6 +46,8 @@
 
 #include "drw.h"
 #include "util.h"
+#include "cmd.h"
+#include "socket.h"
 
 /* macros */
 #define BUTTONMASK              (ButtonPressMask|ButtonReleaseMask)
@@ -69,13 +71,6 @@ enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
 enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
        ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
-
-typedef union {
-	int i;
-	unsigned int ui;
-	float f;
-	const void *v;
-} Arg;
 
 typedef struct {
 	unsigned int click;
@@ -110,12 +105,7 @@ typedef struct {
 } Key;
 
 typedef struct {
-	const char* name;
-	void (*func)(const Arg *);
-	const Arg darg;
-} Cmd;
-
-typedef struct {
+	const char *name;
 	const char *symbol;
 	void (*arrange)(Monitor *);
 } Layout;
@@ -184,12 +174,9 @@ static int getrootptr(int *x, int *y);
 static long getstate(Window w);
 static int gettextprop(Window w, Atom atom, char *text, unsigned int size);
 static void grabbuttons(Client *c, int focused);
-/* static void grabkeys(void); */
 static void incnmaster(const Arg *arg);
-/* static void keypress(XEvent *e); */
 static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
-/* static void mappingnotify(XEvent *e); */
 static void maprequest(XEvent *e);
 static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
@@ -217,8 +204,6 @@ static void setup(void);
 static void seturgent(Client *c, int urg);
 static void showhide(Client *c);
 static void sigchld(int unused);
-static void socketinit(void);
-static void socketread(void);
 static void spawn(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
@@ -267,8 +252,6 @@ static void (*handler[LASTEvent]) (XEvent *) = {
 	[EnterNotify] = enternotify,
 	[Expose] = expose,
 	[FocusIn] = focusin,
-	/* [KeyPress] = keypress, */
-	/* [MappingNotify] = mappingnotify, */
 	[MapRequest] = maprequest,
 	[MotionNotify] = motionnotify,
 	[PropertyNotify] = propertynotify,
@@ -282,9 +265,6 @@ static Display *dpy;
 static Drw *drw;
 static Monitor *mons, *selmon;
 static Window root, wmcheckwin;
-static struct sockaddr_un socketaddr;
-static char socketbuf[100];
-static int socketfd, socketcl, socketrc;
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
@@ -301,9 +281,6 @@ static Cmd cmds[] = {
 	{ "tag",                tag,            {0} },
 	{ "toggletag",          toggletag,      {0} },
 	{ "killclient",         killclient,     {0} },
-	{ "setlayout_tiling",   setlayout,      {.v = &layouts[0]} },
-	{ "setlayout_floating", setlayout,      {.v = &layouts[1]} },
-	{ "setlayout_monocle",  setlayout,      {.v = &layouts[2]} },
 	{ "setlayout",          setlayout,      {0} },
 	{ "togglefloating",     togglefloating, {0} },
 	{ "focusmon",           focusmon,       {.i = -1 } },
@@ -1009,24 +986,6 @@ grabbuttons(Client *c, int focused)
 	}
 }
 
-/* void */
-/* grabkeys(void) */
-/* { */
-/* 	updatenumlockmask(); */
-/* 	{ */
-/* 		unsigned int i, j; */
-/* 		unsigned int modifiers[] = { 0, LockMask, numlockmask, numlockmask|LockMask }; */
-/* 		KeyCode code; */
-
-/* 		XUngrabKey(dpy, AnyKey, AnyModifier, root); */
-/* 		for (i = 0; i < LENGTH(keys); i++) */
-/* 			if ((code = XKeysymToKeycode(dpy, keys[i].keysym))) */
-/* 				for (j = 0; j < LENGTH(modifiers); j++) */
-/* 					XGrabKey(dpy, code, keys[i].mod | modifiers[j], root, */
-/* 						True, GrabModeAsync, GrabModeAsync); */
-/* 	} */
-/* } */
-
 void
 incnmaster(const Arg *arg)
 {
@@ -1045,22 +1004,6 @@ isuniquegeom(XineramaScreenInfo *unique, size_t n, XineramaScreenInfo *info)
 	return 1;
 }
 #endif /* XINERAMA */
-
-/* void */
-/* keypress(XEvent *e) */
-/* { */
-/* 	unsigned int i; */
-/* 	KeySym keysym; */
-/* 	XKeyEvent *ev; */
-
-/* 	ev = &e->xkey; */
-/* 	keysym = XKeycodeToKeysym(dpy, (KeyCode)ev->keycode, 0); */
-/* 	for (i = 0; i < LENGTH(keys); i++) */
-/* 		if (keysym == keys[i].keysym */
-/* 		&& CLEANMASK(keys[i].mod) == CLEANMASK(ev->state) */
-/* 		&& keys[i].func) */
-/* 			keys[i].func(&(keys[i].arg)); */
-/* } */
 
 void
 killclient(const Arg *arg)
@@ -1146,16 +1089,6 @@ manage(Window w, XWindowAttributes *wa)
 	XMapWindow(dpy, c->win);
 	focus(NULL);
 }
-
-/* void */
-/* mappingnotify(XEvent *e) */
-/* { */
-/* 	XMappingEvent *ev = &e->xmapping; */
-
-/* 	XRefreshKeyboardMapping(ev); */
-/* 	if (ev->request == MappingKeyboard) */
-/* 		grabkeys(); */
-/* } */
 
 void
 maprequest(XEvent *e)
@@ -1479,7 +1412,7 @@ run(void)
 	/* main event loop */
 	XSync(dpy, False);
 	while (running) {
-		socketread();
+		socketaccept();
 		if (XCheckMaskEvent(dpy, ~NoEventMask, &ev) && handler[ev.type]){
 			handler[ev.type](&ev); /* call handler */
 		}
@@ -1607,10 +1540,20 @@ setfullscreen(Client *c, int fullscreen)
 void
 setlayout(const Arg *arg)
 {
-	if (!arg || !arg->v || arg->v != selmon->lt[selmon->sellt])
+	const Layout *layout = NULL;
+	int i;
+	if (arg && *(arg->s)) {
+		for (i = 0; i < LENGTH(layouts); i++) {
+			if (strncmp(layouts[i].name, arg->s, sizeof(arg->s)) == 0) {
+				layout = &layouts[i];
+				break;
+			}
+		}
+		selmon->lt[selmon->sellt] = layout;
+	}
+	if (!layout) {
 		selmon->sellt ^= 1;
-	if (arg && arg->v)
-		selmon->lt[selmon->sellt] = (Layout *)arg->v;
+	}
 	strncpy(selmon->ltsymbol, selmon->lt[selmon->sellt]->symbol, sizeof selmon->ltsymbol);
 	if (selmon->sel)
 		arrange(selmon);
@@ -1699,9 +1642,12 @@ setup(void)
 		|LeaveWindowMask|StructureNotifyMask|PropertyChangeMask;
 	XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
 	XSelectInput(dpy, root, wa.event_mask);
-	/* grabkeys(); */
 	focus(NULL);
-	socketinit();
+	socketinit(socketpath, cmds, LENGTH(cmds));
+	socketlisten();
+
+	Arg initarg = {.v = startupcmd };
+	spawn(&initarg);
 }
 
 
@@ -1742,98 +1688,6 @@ sigchld(int unused)
 	if (signal(SIGCHLD, sigchld) == SIG_ERR)
 		die("can't install SIGCHLD handler:");
 	while (0 < waitpid(-1, NULL, WNOHANG));
-}
-
-void
-socketinit(void)
-{
-	if ((socketfd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-		perror("socket error");
-		exit(-1);
-	}
-
-	int prio = 7;
-	setsockopt(socketfd, SOL_SOCKET, SO_PRIORITY, &prio, 1);
-
-	memset(&socketaddr, 0, sizeof(socketaddr));
-	socketaddr.sun_family = AF_UNIX;
-	if (*socket_path == '\0') {
-		*socketaddr.sun_path = '\0';
-		exit(-1);
-	} else {
-		snprintf(socketaddr.sun_path, sizeof(socketaddr.sun_path), "%s", socket_path);
-		unlink(socket_path);
-	}
-
-	if (bind(socketfd, (struct sockaddr*)&socketaddr, sizeof(socketaddr)) == -1) {
-		perror("bind error");
-		exit(-1);
-	}
-
-	if (listen(socketfd, 5) == -1) {
-		perror("listen error");
-		exit(-1);
-	}
-
-	fcntl(socketfd, F_SETFL, O_NONBLOCK);
-}
-
-void
-socketread(void)
-{
-	unsigned int i;
-	char cmd[64];
-	char type[4];
-	char param[16];
-	int cmd_len = 0, param_len = 0, type_len = 0;
-	Arg arg;
-	char noarg = 0;
-	char fail = 1;
-
-	if ((socketcl = accept(socketfd, NULL, NULL)) != -1) {
-	    fcntl(socketcl, F_SETFL, O_NONBLOCK);
-		socketrc = snprintf(socketbuf, sizeof(socketbuf), "%s\n", "Connect");
-		write(socketcl, socketbuf, socketrc);
-		if ((socketrc = read(socketcl, socketbuf, sizeof(socketbuf)-1)) > 0) {
-			socketbuf[socketrc] = '\0';
-			sscanf(socketbuf, "%s%n%s%n%s%n", cmd, &cmd_len, type, &type_len, param, &param_len);
-
-			socketrc = snprintf(socketbuf, sizeof(socketbuf), "Received: %s %i %s %i %s %i\n", cmd, cmd_len, type, type_len, param, param_len);
-			write(socketcl, socketbuf, socketrc);
-
-			if (param_len == 0) noarg = 1;
-			else if (strncmp(type, "i", 1) == 0)
-				sscanf(param, "%i", &(arg.i));
-			else if (strncmp(type, "ui", 2) == 0) {
-				sscanf(param, "%u", &(arg.ui));
-				arg.ui = 1 << (arg.ui-1);
-			}
-			else if (strncmp(type, "f", 1) == 0)
-				sscanf(param, "%f", &(arg.f));
-
-			socketrc = snprintf(socketbuf, sizeof(socketbuf), "Parsed: %i %u %f\n", arg.i, arg.ui, arg.f);
-			write(socketcl, socketbuf, socketrc);
-
-
-			for (i = 0; i < LENGTH(cmds); i++) {
-				if (strncmp(cmds[i].name, cmd, cmd_len-1) == 0 && cmds[i].func) {
-					if (noarg) arg = cmds[i].darg;
-					cmds[i].func(&arg);
-					fail = 0;
-					break;
-				}
-			}
-		}
-
-		socketrc = snprintf(socketbuf, sizeof(socketbuf), "Status: %s\n", fail ? "FAIL" : "SUCCESS");
-		write(socketcl, socketbuf, socketrc);
-
-		if (socketrc == -1) {
-			perror("read");
-		} else if (socketrc == 0) {
-		    close(socketcl);
-		}
-	}
 }
 
 void
