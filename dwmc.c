@@ -9,6 +9,7 @@
 #include "socket.h"
 
 int running = 1;
+int timeout = 100;
 
 void
 status(const Arg *arg)
@@ -35,8 +36,10 @@ int main(int argc, char *argv[]) {
     if (argc == 2) socketwrite("%s\n", argv[1]);
     else if (argc == 4) socketwrite("%s %s %s\n", argv[1], argv[2], argv[3]);
 
-    while (running) {
+    while (running && timeout) {
         socketread();
+		usleep(10000);
+		timeout--;
     }
 
     printf("end\n");

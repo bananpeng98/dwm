@@ -20,6 +20,8 @@ socketinit(const char *socketpath, Cmd *commands, unsigned int commandslen)
     /* int prio = 7; */
     /* setsockopt(socketfd, SOL_SOCKET, SO_PRIORITY, &prio, 1); */
 
+	printf("Socket path: %s\n", socketpath);
+
     memset(&socketaddr, 0, sizeof(socketaddr));
     socketaddr.sun_family = AF_UNIX;
     if (*socketpath == '\0') {
@@ -42,15 +44,20 @@ socketclose(void)
 void
 socketconnect(void)
 {
-    if (connect(socketfd, (struct sockaddr*)&socketaddr, sizeof(socketaddr)) == -1) {
-        perror("connect error");
-        exit(-1);
+    while (1) {
+        if (connect(socketfd, (struct sockaddr*)&socketaddr, sizeof(socketaddr)) == -1) {
+            perror("connect error");
+            usleep(100000);
+        } else {
+            break;
+        }
     }
 }
 
 void
-socketlisten(void)
+socketlisten(const char *socketpath)
 {
+    unlink(socketpath);
     if (bind(socketfd, (struct sockaddr*)&socketaddr, sizeof(socketaddr)) == -1) {
         perror("bind error");
         exit(-1);

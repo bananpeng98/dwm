@@ -1664,6 +1664,7 @@ setmfact(const Arg *arg)
 void
 setup(void)
 {
+    printf("SETUP START\n");
 	int i;
 	XSetWindowAttributes wa;
 	Atom utf8string;
@@ -1672,6 +1673,7 @@ setup(void)
 	sigchld(0);
 
 	/* init screen */
+    printf("INIT SCREEN\n");
 	screen = DefaultScreen(dpy);
 	sw = DisplayWidth(dpy, screen);
 	sh = DisplayHeight(dpy, screen);
@@ -1683,6 +1685,7 @@ setup(void)
 	bh = drw->fonts->h + 2;
 	updategeom();
 	/* init atoms */
+    printf("INIT ATOMS\n");
 	utf8string = XInternAtom(dpy, "UTF8_STRING", False);
 	wmatom[WMProtocols] = XInternAtom(dpy, "WM_PROTOCOLS", False);
 	wmatom[WMDelete] = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
@@ -1698,14 +1701,17 @@ setup(void)
 	netatom[NetWMWindowTypeDialog] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DIALOG", False);
 	netatom[NetClientList] = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
 	/* init cursors */
+    printf("INIT CURSORS\n");
 	cursor[CurNormal] = drw_cur_create(drw, XC_left_ptr);
 	cursor[CurResize] = drw_cur_create(drw, XC_sizing);
 	cursor[CurMove] = drw_cur_create(drw, XC_fleur);
 	/* init appearance */
+    printf("INIT APPEARANCE\n");
 	scheme = ecalloc(LENGTH(colors), sizeof(Clr *));
 	for (i = 0; i < LENGTH(colors); i++)
 		scheme[i] = drw_scm_create(drw, colors[i], 3);
 	/* init bars */
+    printf("INIT BARS\n");
 	updatebars();
 	updatestatus();
 	/* supporting window for NetWMCheck */
@@ -1721,6 +1727,7 @@ setup(void)
 		PropModeReplace, (unsigned char *) netatom, NetLast);
 	XDeleteProperty(dpy, root, netatom[NetClientList]);
 	/* select events */
+    printf("SELECT EVENTS\n");
 	wa.cursor = cursor[CurNormal]->cursor;
 	wa.event_mask = SubstructureRedirectMask|SubstructureNotifyMask
 		|ButtonPressMask|PointerMotionMask|EnterWindowMask
@@ -1728,11 +1735,15 @@ setup(void)
 	XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
 	XSelectInput(dpy, root, wa.event_mask);
 	focus(NULL);
+    printf("SOCKET INIT\n");
 	socketinit(socketpath, cmds, LENGTH(cmds));
-	socketlisten();
+    printf("SOCKET LISTEN\n");
+	socketlisten(socketpath);
 
+    printf("RUN STARTUP SCRIPT");
 	Arg initarg = {.v = startupcmd };
 	spawn(&initarg);
+    printf("SETUP END");
 }
 
 

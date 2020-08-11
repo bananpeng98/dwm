@@ -16,7 +16,7 @@ void socketinit(const char* socketpath, Cmd *commands, unsigned int commandslen)
 void socketaccept(void);
 void socketread(void);
 void socketconnect(void);
-void socketlisten(void);
+void socketlisten(const char *socketpath);
 void socketwrite(const char *fmt, ...);
 void socketclose(void);
 
