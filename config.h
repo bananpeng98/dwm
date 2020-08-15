@@ -3,6 +3,7 @@
 /* appearance */
 static const unsigned int borderpx  = 1;        /* border pixel of windows */
 static const unsigned int snap      = 32;       /* snap pixel */
+static const int swallowfloating    = 0;        /* 1 means swallow floating windows by default */
 static const int showbar            = 1;        /* 0 means no bar */
 static const int topbar             = 1;        /* 0 means bottom bar */
 static const char *fonts[]          = { "monospace:size=10" };
@@ -27,10 +28,8 @@ static const Rule rules[] = {
    *	WM_NAME(STRING) = title
    */
   /* class      instance    title       tags mask     isfloating   monitor */
-  { "Firefox",  NULL,       NULL,       0,            0,           0 },
-  { "Gimp",     NULL,       NULL,       1 << 4,       1,           -1 },
-  { "Spotify",  "spotify", "Spotify",   1 << 8,       0,           -1 },
-  { "mpv",      NULL,      NULL,        0,            1,           -1 },
+  { "st-256color", NULL,      NULL,           0,          0,             1,          0,        -1 },
+	{ NULL,          NULL,      "Event Tester", 0,          1,             0,          1,        -1 }, /* xev */
 };
 
 /* layout(s) */
@@ -116,4 +115,83 @@ static Button buttons[] = {
   { ClkTagBar,            0,              Button3,        toggleview,     {0} },
   { ClkTagBar,            MODKEY,         Button1,        tag,            {0} },
   { ClkTagBar,            MODKEY,         Button3,        toggletag,      {0} },
+};
+
+void
+setlayoutex(const Arg *arg)
+{
+  setlayout(&((Arg) { .v = &layouts[arg->i] }));
+}
+
+void
+viewex(const Arg *arg)
+{
+  view(&((Arg) { .ui = 1 << arg->ui }));
+}
+
+void
+viewall(const Arg *arg)
+{
+  view(&((Arg){.ui = ~0}));
+}
+
+void
+toggleviewex(const Arg *arg)
+{
+  toggleview(&((Arg) { .ui = 1 << arg->ui }));
+}
+
+void
+tagex(const Arg *arg)
+{
+  tag(&((Arg) { .ui = 1 << arg->ui }));
+}
+
+void
+toggletagex(const Arg *arg)
+{
+  toggletag(&((Arg) { .ui = 1 << arg->ui }));
+}
+
+void
+tagall(const Arg *arg)
+{
+  tag(&((Arg){.ui = ~0}));
+}
+
+void
+togglescratchsig(const Arg *arg)
+{
+  togglescratch(&((Arg){.v = scratchpadcmd }));
+}
+
+/* signal definitions */
+/* signum must be greater than 0 */
+/* trigger signals using `xsetroot -name "fsignal:<signame> [<type> <value>]"` */
+static Signal signals[] = {
+  /* signum           function */
+  { "focusstack",     focusstack },
+  { "setmfact",       setmfact },
+  { "togglebar",      togglebar },
+  { "incnmaster",     incnmaster },
+  { "togglefloating", togglefloating },
+  { "focusmon",       focusmon },
+  { "tagmon",         tagmon },
+  { "zoom",           zoom },
+  { "view",           view },
+  { "viewall",        viewall },
+  { "viewex",         viewex },
+  { "toggleview",     view },
+  { "toggleviewex",   toggleviewex },
+  { "tag",            tag },
+  { "tagall",         tagall },
+  { "tagex",          tagex },
+  { "toggletag",      tag },
+  { "toggletagex",    toggletagex },
+  { "killclient",     killclient },
+  { "quit",           quit },
+  { "setlayout",      setlayout },
+  { "setlayoutex",    setlayoutex },
+  { "rotatestack",    rotatestack },
+  { "togglescratch",  togglescratchsig },
 };
